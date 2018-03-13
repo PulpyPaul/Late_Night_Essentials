@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang = "en">
+    <head>
+        <meta charset = "utf-8">
+        <title>Post-Party Essentials</title>
+        
+        <!-- Jquery -->
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js"></script>
+        
+        <!-- Google Places API library -->
+        <script type="text/javascript" src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCCXUoatCrjBv8qpECtSvUMTXCCt1Nx_80&libraries=places"></script>
+        
+        <script>
+        "use strict";
+        
+        // IIFE
+        (function(){
+                
+            // Google Places API Key
+            var googlePlacesKey = "AIzaSyCCXUoatCrjBv8qpECtSvUMTXCCt1Nx_80";
+            
+            // Google Geolocation API Key
+            var googleGeoKey = "AIzaSyC0y5Dbp1PubzWXa5uL4ecafdK35en6aU4";
+                        
+            // Geolocation request url to append
+            var geoRequest = "https://maps.googleapis.com/maps/api/geocode/json?address=";
+            
+            // holds the search address            
+            var searchValue;
+            
+            // used to create location to search in places API
+            var longitude;
+            var latitude;
+            
+            // location object literal that holds long and lat values
+            var loc;
+            
+            // google maps object and maps markers
+            var map;
+            var markers = [];
+            
+            // Object used to call services from the Google place API Library
+            var placesService;
+            
+            // Keeps track of how many searches the user has done
+            var seachCounter = 0;
+            
+            function init(){
+                
+                // creates a google map
+                map = new google.maps.Map(document.getElementById('map'), {
+                    zoom: 0,
+                    center: new google.maps.LatLng(0, 0)
+                });
+                
+                // creates the object to call requests from the Google Places API
+                placesService = new google.maps.places.PlacesService(map);
+                
+                // sets up click event to get data upon click   
+                document.querySelector("#searchButton").onclick = getGeoData;
+                
+                // removes loader once the page loads
+                document.querySelector("#loader").style.display = "none";
+            }
+            
+            // Gets geolocation data using Google Geolocation API
+            function getGeoData(){
+                
+                // clears markers on map
+                clearMarkers();
+                
+                // updates search counter
+                seachCounter++;
+                
+                // enables loader animation when user clicks button
+                document.querySelector("#loader").style.display = "";
+                
+                // gets the text in the form
+                searchValue = document.querySelector("#searchAddress").value;
+                
+                // Saves the search history in local storage
+                localStorage.setItem("Search Address: " +seachCounter, searchValue);
+                
+                // removes trailing spaces
+                searchValue = searchValue.trim();
+                
+                // returns if nothing contained in the form
+                if (searchValue.length <  1) return;
+                
+                // puts %20 instead of spaces
+                searchValue = encodeURI(searchValue);
+                
+                // adds the value to the request link
+                var geoRequestLink = geoRequest + searchValue;
+                
+                // Sends the request and uses the object in loadCoordinates
+                $.ajax({
+		          dataType: "json",
+                  url: geoRequestLink,
+		          data: null,
+		          success: loadCoordinates
+		        });
+            }
+            
+            // Creates a location to search in the Places API
+            function loadCoordinates(jsonLiteral){
+                
+                // If theirs no results, return and inform the user
+                if(jsonLiteral.results.length == 0){
+                    document.querySelector("#placesContent").innerHTML = "<p>No address found, try a valid address!</p>";
+                    document.querySelector("#loader").style.display = "none"
+                    return;
+                }
+                
+                // stores the longitude and latitude
+                latitude = jsonLiteral.results[0].geometry.location.lat;
+                longitude = jsonLiteral.results[0].geometry.location.lng;
+                
+                // creates a location using the longitude and latitude
+                loc = new google.maps.LatLng(latitude, longitude);
+                
+                // centers the map on the location of the address and zooms in
+                map.setCenter(loc);
+                map.setZoom(14);
+                
+                
+                
+                // creates a green marker on the map
+                var marker = new google.maps.Marker({
+                    position: loc,
+                    map: map,
+                    title: "Searched Address", 
+                    icon: 'http://maps.google.com/mapfiles/ms/icons/green-dot.png'
+                });
+                
+                // adds marker to array
+                markers.push(marker);
+                
+                // gets places data based on the location received
+                getPlacesData();
+            }
+            
+            // Creates the main content of the webpage from the search results
+            function loadPlaces(jsonLiteral){
+                
+                // main content string
+                var bigString = "";
+                
+                // loops through all results
+                for (var i = 0; i < jsonLiteral.length; i++){
+                    
+                    // adds a container and the title
+                    bigString += "<div class='contentDiv'>";
+                    bigString += "<h2>" +jsonLiteral[i].name+ "</h2>";
+                    
+                    // adds an image if their is one
+                    if(jsonLiteral[i].photos != null){
+                        bigString += "<img src='" +jsonLiteral[i].photos[0].getUrl({'maxWidth': 200, 'maxHeight': 200})+ "' alt='Image'>";
+                    } else{
+                        bigString += "<p>-- No Image Available --";
+                    }
+                    
+                    // adds an address and closes container
+                    bigString += "<p>Address: "+jsonLiteral[i].vicinity+ "</p>";
+                    bigString += "</div>";
+                    
+                    // creates a marker on the map
+                    var marker = new google.maps.Marker({
+                        position: jsonLiteral[i].geometry.location,
+                        map: map,
+                        title: jsonLiteral[i].name, 
+                        icon: jsonLiteral[i].icon
+                    });
+                    
+                    // adds marker to array
+                    markers.push(marker);
+                    
+                    // limits number of results based on what the user selected
+                    if (i+1 == $("#selectElement").val())
+                        break;
+                }
+                
+                // if no results were found, let the user know
+                if(jsonLiteral.length == 0){
+                    bigString += "<p>No results found... Try Searching a bigger radius or checking if your address is correct!";
+                }
+                
+                // removes loader once the page loads information
+                document.querySelector("#loader").style.display = "none";
+                
+                // displays the user's search history using local API storage
+                document.querySelector("#searchHistory").innerHTML += "<p>Search " +seachCounter+ ": " +localStorage.getItem("Search Address: " +(seachCounter))+ "</p>";
+                
+                // adds bigstring to the main content and fades it in                
+                document.querySelector("#placesContent").innerHTML = bigString;
+                document.querySelector("#placesContent").style.display = "none";
+                $("#placesContent").fadeIn(1000);
+                
+            }
+            
+            // Creates a nearby search request and calls the function to do so
+            function getPlacesData(){
+                
+                // gets the search radius from user input
+                var searchRadius = $("#searchRadius").val();
+                
+                // sets a maximum on the search radius
+                if (searchRadius > 50000){
+                    searchRadius = 50000;
+                }
+                
+                // sets up a request with the location coordinates of the geolocation returned request
+                var placeRequest = {
+                    location: loc,
+                    radius: searchRadius,
+                    openNow: true,
+                    types: ['restaurant', 'food', 'grocery_or_supermarket']
+                };
+                
+                // calls the places services and uses the callback function loadPlaces
+                placesService.nearbySearch(placeRequest, loadPlaces);
+            }
+            
+            function clearMarkers(){
+                // empty and clears all markers in array
+                for (var i = 0; i < markers.length; i++){
+                    markers[i].setMap(null);
+                }
+                
+                // empties array
+                markers = [];
+            }
+            
+            window.onload = init;
+            
+        }());
+        </script>
+        
+        <style>
+            
+            @font-face {
+                font-family: headerFont;
+                src: url(headerFont.otf);
+            }
+            
+            @font-face {
+                font-family: contentFont;
+                src: url(contentFont.ttf);
+            }
+            
+            #searchButton {
+                padding: 10px;
+                margin: auto;
+            }
+            
+            #searchAdddress {
+                padding: 10px;
+            }
+            
+            #map{
+                height: 230px;
+                width: 800px;
+                margin: auto;
+                padding: 10px;
+                display: table;
+                clear: left;
+                margin-top: 20px;
+                margin-bottom: 20px;
+                border: 10px solid black;
+            }
+            
+            #header{
+                margin: auto;
+                text-align: center;
+                font-family: headerFont;
+                font-size: 40pt;
+            }
+            
+            #searchButton{
+                font-family: contentFont;
+            }
+            
+            #description{
+                text-align: center;
+                font-family: contentFont;
+            }
+            
+            #searchArea{
+                margin: auto;
+                text-align: center;
+            }
+            
+            #placesContent{
+                font-family: contentFont;
+            }
+            
+            body{
+                margin: 0 auto;
+                width: 90%;
+            }
+            
+            html {
+                background-color: gainsboro;
+            }
+            
+            .contentDiv{
+                height: 400px;
+                width: 300px;
+                float: left;
+                border: 10px solid black;
+                margin-right: 10px;
+                margin-top: 20px;
+                margin-bottom: 10px;
+                text-align: center;
+            }
+            
+            #interactiveInput{
+                margin: auto;
+                text-align: center;
+                padding: 20px;
+            }
+            
+            .interactiveText{
+                display: inline;
+                font-family: contentFont;
+            }
+            
+            #searchHistory{
+                font-family: contentFont;
+                text-align: center;
+            }
+            
+            #selectElement{
+                margin-right: 20px;    
+            }
+            
+            #searchRadius{
+                width: 50px;
+            }
+            
+            #loader {
+                border: 16px solid #f3f3f3;
+                border-radius: 50%;
+                border-top: 16px solid #3498db;
+                width: 120px;
+                height: 120px;
+                -webkit-animation: spin 2s linear infinite;
+                animation: spin 2s linear infinite;
+                margin: auto;
+                margin-top: 200px;
+            }
+
+            @-webkit-keyframes spin {
+                0% { -webkit-transform: rotate(0deg); }
+                100% { -webkit-transform: rotate(360deg); }
+            }
+
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+                
+        </style>
+    </head>
+    <body>
+        <h1 id="header">Post Party Essentials</h1>
+        <h3 id="description">Enter an address to find open food locations in your area!</h3>
+                
+        <div id="searchArea">
+            <button type="button" id="searchButton">FIND ME FOOD!</button>
+            <input id="searchAddress" type="text" size="40" maxlength="80" autofocus value="7 Pine Tree Drive Farmingdale" />
+        </div>
+        
+        <div id="interactiveInput">
+            <p class="interactiveText">Number of results: </p>
+            <select id="selectElement">
+                <option value="5">5</option>
+                <option value="10">10</option>
+                <option value="15">15</option>
+                <option value="20">20</option>
+            </select>
+            <p class="interactiveText">Radius from location (meters) :</p>
+            <input id="searchRadius" type="number" size="1" value="2000" />
+        
+        </div>
+            <div id="searchHistory">
+        </div>
+        
+        <div id="loader"></div>
+        <div id="placesContent"></div>
+        <div id="map"></div>
+    </body>
+</html>
